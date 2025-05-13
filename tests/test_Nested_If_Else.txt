@@ -1,0 +1,11 @@
+int a;
+int b;
+if (a == 1) {
+    if (b == 2)
+        a = 3;
+    else
+        b = 4;
+} else {
+    a = 5;
+}
+

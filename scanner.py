@@ -16,16 +16,18 @@ class Token(Enum):
     NUM    = "NUM"
     ASSIGN = "="
     EQ     = "=="
+    GT     = ">"     # Added greater-than
+    LT     = "<"
     PLUS   = "+"
     MINUS  = "-"
     MUL    = "*"
-    LT     = "<"
     SEMI   = ";"
     IGNORE = "IGNORE"
     IF     = "if"
     ELSE   = "else"
     FOR    = "for"
     INT    = "int"
+
 class Lexeme:
     def __init__(self, token: Token, value: str) -> None:
         self.token = token
@@ -76,7 +78,10 @@ def idy(l: Lexeme) -> Lexeme:
 
 tokens = [
     (Token.IGNORE, r"[ \t\n]+", idy),
+    (Token.IGNORE, r"//.*", idy),
     (Token.EQ, r"==", idy),
+    (Token.GT, r">", idy),           # Added token
+    (Token.LT, r"<", idy),
     (Token.LPAR, r"\(", idy),
     (Token.RPAR, r"\)", idy),
     (Token.LBRACE, r"\{", idy),
@@ -86,7 +91,6 @@ tokens = [
     (Token.PLUS, r"\+", idy),
     (Token.MINUS, r"-", idy),
     (Token.MUL, r"\*", idy),
-    (Token.LT, r"<", idy),
     (Token.NUM, r"\d+(\.\d+)?", idy),
     (Token.IF, r"\bif\b", idy),
     (Token.ELSE, r"\belse\b", idy),

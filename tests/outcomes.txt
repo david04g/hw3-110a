@@ -1,1 +1,18 @@
 # describe the outcomes of your test cases here
+test1.txt: pass
+test2.txt: pass
+test3.txt: pass
+test_Arithmetic_Expressions.txt: pass
+test_Assignment.txt: pass
+test_Empty_If_Else.txt: pass
+test_For_Loop.txt: pass
+test_If_Else.txt: pass
+test_Int_and_Floats.txt: pass
+test_Nested_If_Else.txt: pass
+test_Token_Combination1.txt: pass
+test_Token_Combination2.txt: pass
+test_Token_Combination3.txt: pass
+test_Token_Combination4.txt: pass
+test_Token_Combination5.txt: pass
+test_Variable_Declaration.txt: pass
+test_redundant_assignments_or_comparisons.txt: pass

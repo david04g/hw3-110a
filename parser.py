@@ -1,30 +1,32 @@
 from scanner import Lexeme, Token, Scanner
 from typing import List, Optional
 
-# Symbol Table exception, for Part 2
 class SymbolTableException(Exception):
     def __init__(self, lineno: int, ID: str) -> None:
         message = f"Symbol table error on line: {lineno}\nUndeclared ID: {ID}"
         super().__init__(message)
 
-# Symbol Table skeleton (to be filled in for Part 2)
 class SymbolTable:
     def __init__(self) -> None:
-        pass
+        self.scopes = [{}]
 
-    def insert(self, ID: str, info) -> None:
-        pass
+    def insert(self, ID: str, info=None) -> None:
+        if ID in self.scopes[-1]:
+            raise SymbolTableException(-1, ID)
+        self.scopes[-1][ID] = info
 
     def lookup(self, ID: str):
-        pass
+        for scope in reversed(self.scopes):
+            if ID in scope:
+                return scope[ID]
+        raise SymbolTableException(-1, ID)
 
     def push_scope(self) -> None:
-        pass
+        self.scopes.append({})
 
     def pop_scope(self) -> None:
-        pass
+        self.scopes.pop()
 
-# Parser error exception for syntax errors
 class ParserException(Exception):
     def __init__(self, lineno: int, lexeme: Lexeme, tokens: List[Token]) -> None:
         message = f"Parser error on line: {lineno}\nExpected one of: {tokens}\nGot: {lexeme}"
@@ -35,6 +37,8 @@ class Parser:
         self.scanner = scanner
         self.use_symbol_table = use_symbol_table
         self.lookahead = self.scanner.token()
+        if use_symbol_table:
+            self.symbol_table = SymbolTable()
 
     def _match(self, expected_token: Token):
         if self.lookahead and self.lookahead.token == expected_token:
@@ -54,38 +58,46 @@ class Parser:
 
     def _stmt_list(self):
         while self.lookahead and self.lookahead.token in {
-            Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE
+            Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI, Token.NUM, Token.LPAR
         }:
             self._stmt()
 
     def _stmt(self):
         if self.lookahead.token == Token.INT:
             self._decl()
-        elif self.lookahead.token == Token.ID:
-            self._assign()
         elif self.lookahead.token == Token.IF:
             self._if_stmt()
         elif self.lookahead.token == Token.FOR:
             self._for_stmt()
         elif self.lookahead.token == Token.LBRACE:
             self._block()
+        elif self.lookahead.token == Token.SEMI:
+            self._match(Token.SEMI)  # empty statement
+        elif self.lookahead.token in {Token.ID, Token.NUM, Token.LPAR}:
+            self._expr()
+            self._match(Token.SEMI)
         else:
             raise ParserException(
                 self.scanner.get_lineno(),
                 self.lookahead,
-                [Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE]
+                [Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI]
             )
 
     def _decl(self):
         self._match(Token.INT)
+        var_name = self.lookahead.value
         self._match(Token.ID)
+        if self.use_symbol_table:
+            self.symbol_table.insert(var_name)
         self._match(Token.SEMI)
 
-    def _assign(self):
+    def _assign_expr(self):
+        var_name = self.lookahead.value
+        if self.use_symbol_table:
+            self.symbol_table.lookup(var_name)
         self._match(Token.ID)
         self._match(Token.ASSIGN)
         self._expr()
-        self._match(Token.SEMI)
 
     def _if_stmt(self):
         self._match(Token.IF)
@@ -100,22 +112,26 @@ class Parser:
     def _for_stmt(self):
         self._match(Token.FOR)
         self._match(Token.LPAR)
-        self._assign()
+        self._assign_expr()
         self._match(Token.SEMI)
         self._expr()
         self._match(Token.SEMI)
-        self._assign()
+        self._assign_expr()
         self._match(Token.RPAR)
         self._stmt()
 
     def _block(self):
         self._match(Token.LBRACE)
+        if self.use_symbol_table:
+            self.symbol_table.push_scope()
         self._stmt_list()
+        if self.use_symbol_table:
+            self.symbol_table.pop_scope()
         self._match(Token.RBRACE)
 
     def _expr(self):
         self._simple_expr()
-        if self.lookahead and self.lookahead.token in {Token.EQ, Token.LT}:
+        if self.lookahead and self.lookahead.token in {Token.EQ, Token.LT, Token.GT}:
             self._match(self.lookahead.token)
             self._simple_expr()
 
@@ -136,8 +152,12 @@ class Parser:
             self._match(Token.LPAR)
             self._expr()
             self._match(Token.RPAR)
-        elif self.lookahead.token in {Token.NUM, Token.ID}:
-            self._match(self.lookahead.token)
+        elif self.lookahead.token == Token.ID:
+            if self.use_symbol_table:
+                self.symbol_table.lookup(self.lookahead.value)
+            self._match(Token.ID)
+        elif self.lookahead.token == Token.NUM:
+            self._match(Token.NUM)
         else:
             raise ParserException(
                 self.scanner.get_lineno(),
