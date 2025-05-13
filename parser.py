@@ -58,13 +58,28 @@ class Parser:
 
     def _stmt_list(self):
         while self.lookahead and self.lookahead.token in {
-            Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI, Token.NUM, Token.LPAR
+            Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI
         }:
             self._stmt()
 
     def _stmt(self):
         if self.lookahead.token == Token.INT:
             self._decl()
+        elif self.lookahead.token == Token.ID:
+            temp = self.lookahead
+            self._match(Token.ID)
+            if self.lookahead and self.lookahead.token == Token.ASSIGN:
+                if self.use_symbol_table:
+                    self.symbol_table.lookup(temp.value)
+                self._match(Token.ASSIGN)
+                self._expr()
+                self._match(Token.SEMI)
+            else:
+                raise ParserException(
+                    self.scanner.get_lineno(),
+                    self.lookahead,
+                    [Token.ASSIGN]
+                )
         elif self.lookahead.token == Token.IF:
             self._if_stmt()
         elif self.lookahead.token == Token.FOR:
@@ -72,9 +87,6 @@ class Parser:
         elif self.lookahead.token == Token.LBRACE:
             self._block()
         elif self.lookahead.token == Token.SEMI:
-            self._match(Token.SEMI)  # empty statement
-        elif self.lookahead.token in {Token.ID, Token.NUM, Token.LPAR}:
-            self._expr()
             self._match(Token.SEMI)
         else:
             raise ParserException(
