@@ -1,180 +1,245 @@
-from scanner import Lexeme, Token, Scanner
-from typing import List, Optional
+from scanner import Lexeme,Token,Scanner
+from typing import Callable,List,Tuple,Optional
 
+# Symbol Table exception, requires a line number and ID
 class SymbolTableException(Exception):
-    def __init__(self, lineno: int, ID: str) -> None:
-        message = f"Symbol table error on line: {lineno}\nUndeclared ID: {ID}"
-        super().__init__(message)
+    
+    def __init__(self, lineno:int, ID:str) -> None:
+        message = "Symbol table error on line: " + str(lineno) + "\nUndeclared ID: " + ID
+        super().__init__(message)    
 
+#Implement all members of this class for Part 3
 class SymbolTable:
     def __init__(self) -> None:
-        self.scopes = [{}]
+        self.symbol_table = [{}]
 
-    def insert(self, ID: str, info=None) -> None:
-        if ID in self.scopes[-1]:
-            raise SymbolTableException(-1, ID)
-        self.scopes[-1][ID] = info
+    def insert(self, ID:str, info) -> None:
+        self.symbol_table[-1][ID] = info
 
-    def lookup(self, ID: str):
-        for scope in reversed(self.scopes):
+    def lookup(self, ID:str):
+        for scope in reversed(self.symbol_table):
             if ID in scope:
                 return scope[ID]
-        raise SymbolTableException(-1, ID)
+        return None
 
     def push_scope(self) -> None:
-        self.scopes.append({})
+        self.symbol_table.append({})
 
     def pop_scope(self) -> None:
-        self.scopes.pop()
+        if len(self.symbol_table) > 1:
+            self.symbol_table.pop()
 
 class ParserException(Exception):
-    def __init__(self, lineno: int, lexeme: Lexeme, tokens: List[Token]) -> None:
-        message = f"Parser error on line: {lineno}\nExpected one of: {tokens}\nGot: {lexeme}"
+    
+    # Pass a line number, current lexeme, and what tokens are expected
+    def __init__(self, lineno:int, lexeme:Lexeme, tokens:List[Token]) -> None:
+        message = "Parser error on line: " + str(lineno) + "\nExpected one of: " + str(tokens) + "\nGot: " + str(lexeme)
         super().__init__(message)
 
 class Parser:
-    def __init__(self, scanner: Scanner, use_symbol_table: bool) -> None:
+    def __init__(self, scanner:Scanner, use_symbol_table:bool) -> None:
         self.scanner = scanner
         self.use_symbol_table = use_symbol_table
-        self.lookahead = self.scanner.token()
         if use_symbol_table:
             self.symbol_table = SymbolTable()
 
-    def _match(self, expected_token: Token):
-        if self.lookahead and self.lookahead.token == expected_token:
-            self.lookahead = self.scanner.token()
+    # Implement one function in this class for every non-terminal in
+    # your grammar using the recursive descent recipe from the book
+    # and the lectures for part 2
+
+    # Implement me:
+    # s is the string to parse
+    def parse(self, s:str):
+        self.scanner.input_string(s)
+        self.curr_lex = self.scanner.token()
+        self.program()
+
+    def program(self):
+        self.statement_list()
+
+    def statement_list(self):
+        if self.curr_lex is not None:
+            if self.curr_lex.token in [Token.ID, Token.IF, Token.FOR, Token.FLOAT, Token.INT, Token.LBRACE]:
+                self.statement()
+                self.statement_list()
+
+#  assignment_statement   {ID}
+#           |  if_else_statement      {IF}
+#           |  block_statement        {LBRACE}
+#           |  for_loop_statement     {FOR}
+    def statement(self):
+        if self.curr_lex.token == Token.ID:
+            self.assignment_statement()
+        elif self.curr_lex.token == Token.IF:
+            self.if_else_statement()
+        elif self.curr_lex.token == Token.FOR:
+            self.for_loop_statement()
+        elif self.curr_lex.token == Token.FLOAT or self.curr_lex.token == Token.INT:
+            self.declaration_statement()
+        elif self.curr_lex.token == Token.LBRACE:
+            self.block_statement()
         else:
-            raise ParserException(
-                self.scanner.get_lineno(),
-                self.lookahead if self.lookahead else Lexeme(Token.ID, "EOF"),
-                [expected_token]
-            )
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.ID, Token.IF, Token.FOR, Token.FLOAT, Token.INT, Token.LBRACE])
 
-    def parse(self, s: str):
-        self._program()
-
-    def _program(self):
-        self._stmt_list()
-
-    def _stmt_list(self):
-        while self.lookahead and self.lookahead.token in {
-            Token.INT, Token.FLOATTYPE, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI
-        }:
-            self._stmt()
-
-    def _stmt(self):
-        if self.lookahead.token in {Token.INT, Token.FLOATTYPE}:
-            self._decl()
-        elif self.lookahead.token == Token.ID:
-            temp = self.lookahead
-            self._match(Token.ID)
-            if self.lookahead and self.lookahead.token == Token.ASSIGN:
-                if self.use_symbol_table:
-                    self.symbol_table.lookup(temp.value)
-                self._match(Token.ASSIGN)
-                self._expr()
-                self._match(Token.SEMI)
-            else:
-                raise ParserException(
-                    self.scanner.get_lineno(),
-                    self.lookahead,
-                    [Token.ASSIGN]
-                )
-        elif self.lookahead.token == Token.IF:
-            self._if_stmt()
-        elif self.lookahead.token == Token.FOR:
-            self._for_stmt()
-        elif self.lookahead.token == Token.LBRACE:
-            self._block()
-        elif self.lookahead.token == Token.SEMI:
-            self._match(Token.SEMI)
+    def eat(self, expected:Token):
+        if self.curr_lex.token == expected:
+            self.curr_lex = self.scanner.token()
         else:
-            raise ParserException(
-                self.scanner.get_lineno(),
-                self.lookahead,
-                [Token.INT, Token.FLOATTYPE, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI]
-            )
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [expected])
 
-    def _decl(self):
-        type_token = self.lookahead.token
-        self._match(type_token)
-        var_name = self.lookahead.value
-        self._match(Token.ID)
+    def assignment_statement(self):
+        val = self.curr_lex.value
         if self.use_symbol_table:
-            self.symbol_table.insert(var_name, type_token)
-        self._match(Token.SEMI)
+            if self.symbol_table.lookup(val) is None:
+                raise SymbolTableException(self.scanner.get_lineno(), val)
+        self.eat(Token.ID)
+        self.eat(Token.ASSIGN)
+        self.expr()
+        self.eat(Token.SEMI)
 
-    def _assign_expr(self):
-        var_name = self.lookahead.value
+    def if_else_statement(self):
+        self.eat(Token.IF)
+        self.eat(Token.LPAR)
+        self.expr()
+        self.eat(Token.RPAR)
+        self.statement()
+        self.eat(Token.ELSE)
+        self.statement()
+
+    def for_loop_statement(self):
+        self.eat(Token.FOR)
+        self.eat(Token.LPAR)
+        self.eat(Token.ID)
+        self.eat(Token.ASSIGN)
+        self.expr()
+        self.eat(Token.SEMI)
+        self.expr()
+        self.eat(Token.SEMI)
+        self.eat(Token.ID)
+        self.eat(Token.ASSIGN)
+        self.expr()
+        self.eat(Token.RPAR)
+        self.statement()
+
+    def declaration_statement(self):
+        t = None
+        if self.curr_lex.token == Token.FLOAT:
+            t = Token.FLOAT
+            self.eat(Token.FLOAT)
+        elif self.curr_lex.token == Token.INT:
+            t = Token.INT
+            self.eat(Token.INT)
+        else:
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.FLOAT, Token.INT])
+
+        val = self.curr_lex.value
+
         if self.use_symbol_table:
-            self.symbol_table.lookup(var_name)
-        self._match(Token.ID)
-        self._match(Token.ASSIGN)
-        self._expr()
+            if val in self.symbol_table.scope[-1]:
+                raise SymbolTableException(self.scanner.get_lineno(), val)
+            self.symbol_table.insert(val, t)
 
-    def _if_stmt(self):
-        self._match(Token.IF)
-        self._match(Token.LPAR)
-        self._expr()
-        self._match(Token.RPAR)
-        self._stmt()
-        if self.lookahead and self.lookahead.token == Token.ELSE:
-            self._match(Token.ELSE)
-            self._stmt()
+        self.eat(Token.ID)
+        self.eat(Token.SEMI)
 
-    def _for_stmt(self):
-        self._match(Token.FOR)
-        self._match(Token.LPAR)
-        self._assign_expr()
-        self._match(Token.SEMI)
-        self._expr()
-        self._match(Token.SEMI)
-        self._assign_expr()
-        self._match(Token.RPAR)
-        self._stmt()
-
-    def _block(self):
-        self._match(Token.LBRACE)
+    def block_statement(self):
+        self.eat(Token.LBRACE)
         if self.use_symbol_table:
             self.symbol_table.push_scope()
-        self._stmt_list()
+        self.statement_list()
         if self.use_symbol_table:
             self.symbol_table.pop_scope()
-        self._match(Token.RBRACE)
-
-    def _expr(self):
-        self._simple_expr()
-        if self.lookahead and self.lookahead.token in {Token.EQUAL, Token.LT}:
-            self._match(self.lookahead.token)
-            self._simple_expr()
-
-    def _simple_expr(self):
-        self._term()
-        while self.lookahead and self.lookahead.token in {Token.PLUS, Token.MINUS}:
-            self._match(self.lookahead.token)
-            self._term()
-
-    def _term(self):
-        self._factor()
-        while self.lookahead and self.lookahead.token in {Token.MUL, Token.DIV}:
-            self._match(self.lookahead.token)
-            self._factor()
-
-    def _factor(self):
-        if self.lookahead.token == Token.LPAR:
-            self._match(Token.LPAR)
-            self._expr()
-            self._match(Token.RPAR)
-        elif self.lookahead.token == Token.ID:
-            if self.use_symbol_table:
-                self.symbol_table.lookup(self.lookahead.value)
-            self._match(Token.ID)
-        elif self.lookahead.token in {Token.NUM, Token.FLOAT}:
-            self._match(self.lookahead.token)
+        self.eat(Token.RBRACE)
+    
+    def expr(self):
+        self.comp()
+        self.expr2()
+    
+    def expr2(self):
+        if self.curr_lex.token is not None:
+            if self.curr_lex.token == Token.EQUAL:
+                self.eat(Token.EQUAL)
+                self.comp()
+                self.expr2()
+            elif self.curr_lex.token in {Token.SEMI, Token.RPAR}:
+                pass
+            else:
+                raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.ID, Token.NUM, Token.FLOAT, Token.LPAR])
         else:
-            raise ParserException(
-                self.scanner.get_lineno(),
-                self.lookahead,
-                [Token.NUM, Token.FLOAT, Token.ID, Token.LPAR]
-            )
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.ID, Token.NUM, Token.FLOAT, Token.LPAR])
+
+    def comp(self):
+        self.factor()
+        self.comp2()
+
+    def comp2(self):
+        if self.curr_lex.token is not None:
+            if self.curr_lex.token == Token.LT:
+                self.eat(Token.LT)
+                self.factor()
+                self.comp2()
+            elif self.curr_lex.token in {Token.SEMI, Token.RPAR, Token.EQUAL}:
+                pass
+            else:
+                raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.LT, Token.SEMI, Token.RPAR, Token.EQUAL])
+        else:
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.LT, Token.SEMI, Token.RPAR, Token.EQUAL])
+
+    def factor(self):
+        self.term()
+        self.factor2()
+
+    def factor2(self):
+        if self.curr_lex.token is not None:
+            if self.curr_lex.token == Token.PLUS:
+                self.eat(Token.PLUS)
+                self.term()
+                self.factor2()
+            elif self.curr_lex.token == Token.MINUS:
+                self.eat(Token.MINUS)
+                self.term()
+                self.factor2()
+            elif self.curr_lex.token in {Token.SEMI, Token.RPAR, Token.EQUAL, Token.LT}:
+                pass
+            else:
+                raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.PLUS, Token.MINUS, Token.SEMI, Token.RPAR, Token.EQUAL, Token.LT])
+        else:
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.PLUS, Token.MINUS, Token.SEMI, Token.RPAR, Token.EQUAL, Token.LT])
+
+    def term(self):
+        self.unit()
+        self.term2()
+
+    def term2(self):
+        if self.curr_lex.token is not None:
+            if self.curr_lex.token == Token.MULT:
+                self.eat(Token.MULT)
+                self.unit()
+                self.term2()
+            elif self.curr_lex.token == Token.DIV:
+                self.eat(Token.DIV)
+                self.unit()
+                self.term2()
+            elif self.curr_lex.token in {Token.SEMI, Token.RPAR, Token.EQUAL, Token.LT, Token.PLUS, Token.MINUS}:
+                pass
+            else:
+                raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.MULT, Token.DIV, Token.SEMI, Token.RPAR, Token.EQUAL, Token.LT, Token.PLUS, Token.MINUS])
+        else:
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.MULT, Token.DIV, Token.SEMI, Token.RPAR, Token.EQUAL, Token.LT, Token.PLUS, Token.MINUS])
+
+    def unit(self):
+        if self.curr_lex.token == Token.NUM:
+            self.eat(Token.NUM)
+        elif self.curr_lex.token == Token.FLOAT:
+            self.eat(Token.FLOAT)
+        elif self.curr_lex.token == Token.ID:
+            self.eat(Token.ID)
+        elif self.curr_lex.token == Token.LPAR:
+            self.eat(Token.LPAR)
+            self.expr()
+            self.eat(Token.RPAR)
+        else:
+            raise ParserException(self.scanner.get_lineno(), self.curr_lex, [Token.NUM, Token.FLOAT, Token.ID, Token.LPAR])
+        
+
 
