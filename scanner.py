@@ -14,19 +14,21 @@ class Token(Enum):
     RBRACE = "}"
     ID     = "ID"
     NUM    = "NUM"
+    FLOAT  = "FLOAT"
     ASSIGN = "="
-    EQ     = "=="
-    GT     = ">"     # Added greater-than
+    EQUAL  = "=="
     LT     = "<"
     PLUS   = "+"
     MINUS  = "-"
     MUL    = "*"
+    DIV    = "/"
     SEMI   = ";"
     IGNORE = "IGNORE"
     IF     = "if"
     ELSE   = "else"
     FOR    = "for"
     INT    = "int"
+    FLOATTYPE = "float"
 
 class Lexeme:
     def __init__(self, token: Token, value: str) -> None:
@@ -35,6 +37,37 @@ class Lexeme:
 
     def __str__(self) -> str:
         return f"({self.token}, \"{self.value}\")"
+
+keywords = {
+    'int': Token.INT,
+    'float': Token.FLOATTYPE,
+    'if': Token.IF,
+    'else': Token.ELSE,
+    'for': Token.FOR
+}
+
+def idy(l: Lexeme) -> Lexeme:
+    return l
+
+tokens = [
+    (Token.LPAR, r"\(", idy),
+    (Token.RPAR, r"\)", idy),
+    (Token.LBRACE, r"\{", idy),
+    (Token.RBRACE, r"\}", idy),
+    (Token.EQUAL, r"==", idy),
+    (Token.ASSIGN, r"=", idy),
+    (Token.LT, r"<", idy),
+    (Token.PLUS, r"\+", idy),
+    (Token.MINUS, r"-", idy),
+    (Token.MUL, r"\*", idy),
+    (Token.DIV, r"/", idy),
+    (Token.SEMI, r";", idy),
+    (Token.FLOAT, r"\d+\.\d+", idy),
+    (Token.NUM, r"\d+", idy),
+    (Token.ID, r"[a-zA-Z_][a-zA-Z0-9_]*", idy),
+    (Token.IGNORE, r"[ \t\n]+", idy),
+    (Token.IGNORE, r"//.*", idy),
+]
 
 class Scanner:
     def __init__(self, tokens: List[Tuple[Token, str, Callable[[Lexeme], Lexeme]]]) -> None:
@@ -49,53 +82,36 @@ class Scanner:
         return self.lineno
 
     def token(self) -> Optional[Lexeme]:
-        while self.istring and self.istring[0] in [' ', '\t', '\n']:
-            if self.istring[0] == '\n':
-                self.lineno += 1
-            self.istring = self.istring[1:]
+        while self.istring:
+            if self.istring[0].isspace():
+                if self.istring[0] == '\n':
+                    self.lineno += 1
+                self.istring = self.istring[1:]
+                continue
 
-        if not self.istring:
-            return None
+            longest_match = ""
+            longest_token = None
+            for token_type, regex, action in self.tokens:
+                match = re.match(regex, self.istring)
+                if match:
+                    text = match.group(0)
+                    if len(text) > len(longest_match):
+                        longest_match = text
+                        longest_token = token_type
 
-        for token_type, regex, action in self.tokens:
-            match = re.match(regex, self.istring)
-            if match:
-                matched_text = match.group(0)
-                self.istring = self.istring[len(matched_text):]
+            if not longest_match:
+                raise ScannerException(self.lineno)
 
-                if token_type == Token.IGNORE:
-                    self.lineno += matched_text.count('\n')
-                    return self.token()
+            self.istring = self.istring[len(longest_match):]
 
-                lexeme = Lexeme(token_type, matched_text)
-                return action(lexeme)
+            if longest_token == Token.IGNORE:
+                self.lineno += longest_match.count('\n')
+                continue
 
-        raise ScannerException(self.lineno)
+            if longest_token == Token.ID and longest_match in keywords:
+                return Lexeme(keywords[longest_match], longest_match)
 
-# Default identity token action
-def idy(l: Lexeme) -> Lexeme:
-    return l
+            return idy(Lexeme(longest_token, longest_match))
 
-tokens = [
-    (Token.IGNORE, r"[ \t\n]+", idy),
-    (Token.IGNORE, r"//.*", idy),
-    (Token.EQ, r"==", idy),
-    (Token.GT, r">", idy),           # Added token
-    (Token.LT, r"<", idy),
-    (Token.LPAR, r"\(", idy),
-    (Token.RPAR, r"\)", idy),
-    (Token.LBRACE, r"\{", idy),
-    (Token.RBRACE, r"\}", idy),
-    (Token.SEMI, r";", idy),
-    (Token.ASSIGN, r"=", idy),
-    (Token.PLUS, r"\+", idy),
-    (Token.MINUS, r"-", idy),
-    (Token.MUL, r"\*", idy),
-    (Token.NUM, r"\d+(\.\d+)?", idy),
-    (Token.IF, r"\bif\b", idy),
-    (Token.ELSE, r"\belse\b", idy),
-    (Token.FOR, r"\bfor\b", idy),
-    (Token.INT, r"\bint\b", idy),
-    (Token.ID, r"[a-zA-Z_][a-zA-Z0-9_]*", idy),
-]
+        return None
 

@@ -1,1 +1,14 @@
 #Please write the grammar you will use here.
+PROGRAM       -> STMT_LIST
+STMT_LIST     -> STMT STMT_LIST | ε
+STMT          -> DECL | ASSIGN_STMT | IF_STMT | FOR_STMT | BLOCK | SEMI
+DECL          -> 'int' ID ';'
+ASSIGN_STMT   -> ID '=' EXPR ';'
+IF_STMT       -> 'if' '(' EXPR ')' STMT [ 'else' STMT ]
+FOR_STMT      -> 'for' '(' ASSIGN_STMT EXPR ';' ASSIGN_STMT ')' STMT
+BLOCK         -> '{' STMT_LIST '}'
+EXPR          -> SIMPLE_EXPR [ ('==' | '<' | '>') SIMPLE_EXPR ]
+SIMPLE_EXPR   -> TERM { ('+' | '-') TERM }
+TERM          -> FACTOR { '*' FACTOR }
+FACTOR        -> NUM | ID | '(' EXPR ')'
+SEMI          -> ';'

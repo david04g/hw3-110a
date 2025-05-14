@@ -58,12 +58,12 @@ class Parser:
 
     def _stmt_list(self):
         while self.lookahead and self.lookahead.token in {
-            Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI
+            Token.INT, Token.FLOATTYPE, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI
         }:
             self._stmt()
 
     def _stmt(self):
-        if self.lookahead.token == Token.INT:
+        if self.lookahead.token in {Token.INT, Token.FLOATTYPE}:
             self._decl()
         elif self.lookahead.token == Token.ID:
             temp = self.lookahead
@@ -92,15 +92,16 @@ class Parser:
             raise ParserException(
                 self.scanner.get_lineno(),
                 self.lookahead,
-                [Token.INT, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI]
+                [Token.INT, Token.FLOATTYPE, Token.ID, Token.IF, Token.FOR, Token.LBRACE, Token.SEMI]
             )
 
     def _decl(self):
-        self._match(Token.INT)
+        type_token = self.lookahead.token
+        self._match(type_token)
         var_name = self.lookahead.value
         self._match(Token.ID)
         if self.use_symbol_table:
-            self.symbol_table.insert(var_name)
+            self.symbol_table.insert(var_name, type_token)
         self._match(Token.SEMI)
 
     def _assign_expr(self):
@@ -143,7 +144,7 @@ class Parser:
 
     def _expr(self):
         self._simple_expr()
-        if self.lookahead and self.lookahead.token in {Token.EQ, Token.LT, Token.GT}:
+        if self.lookahead and self.lookahead.token in {Token.EQUAL, Token.LT}:
             self._match(self.lookahead.token)
             self._simple_expr()
 
@@ -155,8 +156,8 @@ class Parser:
 
     def _term(self):
         self._factor()
-        while self.lookahead and self.lookahead.token == Token.MUL:
-            self._match(Token.MUL)
+        while self.lookahead and self.lookahead.token in {Token.MUL, Token.DIV}:
+            self._match(self.lookahead.token)
             self._factor()
 
     def _factor(self):
@@ -168,12 +169,12 @@ class Parser:
             if self.use_symbol_table:
                 self.symbol_table.lookup(self.lookahead.value)
             self._match(Token.ID)
-        elif self.lookahead.token == Token.NUM:
-            self._match(Token.NUM)
+        elif self.lookahead.token in {Token.NUM, Token.FLOAT}:
+            self._match(self.lookahead.token)
         else:
             raise ParserException(
                 self.scanner.get_lineno(),
                 self.lookahead,
-                [Token.NUM, Token.ID, Token.LPAR]
+                [Token.NUM, Token.FLOAT, Token.ID, Token.LPAR]
             )
 
